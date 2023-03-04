@@ -9,6 +9,8 @@ public class CameraS : MonoBehaviour
     float smoothTime;
     Vector3 velocity;
 
+    //Hi NinjaCad
+
     void start()
     {
         velocity = Vector3.zero;
