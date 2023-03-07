@@ -18,6 +18,9 @@ public class Player : MonoBehaviour
     float coyote;
     [SerializeField] float groundFriction;
     [SerializeField] float airResistance;
+    bool isJumping;
+    float jumpCounter;
+    [SerializeField] float jumpTime;
 
     void Awake()
     {
@@ -46,7 +49,7 @@ public class Player : MonoBehaviour
     {
         if (isGrounded())
         {
-            coyote = 0.10f;
+            coyote = 0.15f;
         } else
         {
             coyote -= Time.deltaTime;
@@ -54,7 +57,7 @@ public class Player : MonoBehaviour
         
         if (Input.GetButtonDown("Jump"))
         {
-            buffer = 0.15f;
+            buffer = 0.1f;
         } else
         {
             buffer -= Time.deltaTime;
@@ -62,9 +65,35 @@ public class Player : MonoBehaviour
 
         if (coyote > 0f && buffer > 0f)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpSpeed);
+            isJumping = true;
+            jumpCounter = jumpTime;
+            //rb.velocity = new Vector2(rb.velocity.x, jumpSpeed);
             buffer = 0f;
         }
+
+        if (isJumping)
+        {
+            if (jumpCounter > 0f)
+            {
+                rb.velocity = new Vector2(rb.velocity.x, jumpSpeed * jumpCounter / jumpTime);
+                jumpCounter -= Time.deltaTime;
+            } else
+            {
+                isJumping = false;
+                
+            }
+
+            if (Input.GetButtonUp("Jump"))
+            {
+                isJumping = false;
+                rb.velocity = new Vector2(rb.velocity.x, 0);
+            }
+        }
+
+        /*if (rb.velocity.y < 0)
+        {
+            rb.velocity += Vector2.down * 1.2f * Time.deltaTime;
+        }*/
         
         velX = Input.GetAxisRaw("Horizontal") * speedX;
     }
