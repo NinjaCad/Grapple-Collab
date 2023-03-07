@@ -4,12 +4,10 @@ using UnityEngine;
 
 public class CameraS : MonoBehaviour
 {
-    [SerializeField] GameObject targetPlayer;
+    /*[SerializeField] GameObject targetPlayer;
     Vector3 targetPosition;
     float smoothTime;
     Vector3 velocity;
-
-    //Hi NinjaCad
 
     void start()
     {
@@ -21,5 +19,5 @@ public class CameraS : MonoBehaviour
     {
         targetPosition = new Vector3(targetPlayer.transform.position.x, targetPlayer.transform.position.y + 2, -10);
         transform.position = Vector3.SmoothDamp(transform.position, targetPosition, ref velocity, smoothTime);
-    }
+    }*/
 }

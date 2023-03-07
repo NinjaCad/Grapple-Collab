@@ -11,10 +11,13 @@ public class Player : MonoBehaviour
     [SerializeField] LayerMask collisionLayers;
     
     float velX;
+    float velY;
     [SerializeField] float speedX;
     [SerializeField] float jumpSpeed;
     float buffer;
     float coyote;
+    [SerializeField] float groundFriction;
+    [SerializeField] float airResistance;
 
     void Awake()
     {
@@ -24,10 +27,22 @@ public class Player : MonoBehaviour
 
     void Start()
     {
-
+        
     }
     
     void Update()
+    {
+        controller();
+
+
+    }
+
+    void FixedUpdate()
+    {
+        rb.velocity = new Vector2(Mathf.Lerp(rb.velocity.x, velX, isGrounded() ? groundFriction : airResistance), rb.velocity.y);
+    }
+    
+    void controller()
     {
         if (isGrounded())
         {
@@ -47,7 +62,7 @@ public class Player : MonoBehaviour
 
         if (coyote > 0f && buffer > 0f)
         {
-            rb.velocity = Vector2.up * jumpSpeed;
+            rb.velocity = new Vector2(rb.velocity.x, jumpSpeed);
             buffer = 0f;
         }
         
@@ -58,10 +73,5 @@ public class Player : MonoBehaviour
     {
         raycast = Physics2D.BoxCast(new Vector3(transform.position.x, transform.position.y - 0.55f, 0), new Vector3(1, 0.1f, 1), 0f, Vector2.down, 0f, collisionLayers);
         return raycast.collider != null;
-    }
-
-    void FixedUpdate()
-    {
-        rb.velocity = new Vector2(velX, rb.velocity.y);
     }
 }
