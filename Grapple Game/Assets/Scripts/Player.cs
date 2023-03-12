@@ -4,103 +4,156 @@ using UnityEngine;
 
 public class Player : MonoBehaviour
 {
-    Rigidbody2D rb;
-    BoxCollider2D bC;
+	Rigidbody2D rb;
 
-    RaycastHit2D raycast;
-    [SerializeField] LayerMask collisionLayers;
-    
-    float velX;
-    float velY;
-    [SerializeField] float speedX;
-    [SerializeField] float jumpSpeed;
-    float buffer;
-    float coyote;
-    [SerializeField] float groundFriction;
-    [SerializeField] float airResistance;
-    bool isJumping;
-    float jumpCounter;
-    [SerializeField] float jumpTime;
+	RaycastHit2D raycast;
 
-    void Awake()
-    {
-        rb = GetComponent<Rigidbody2D>();
-        bC = GetComponent<BoxCollider2D>();
-    }
+	float moveInput;
+	float coyote;
+	float buffer;
+	bool isJumping;
+	
+	[Header("Run")]
+	public float moveSpeed;
+	public float acceleration;
+	public float decceleration;
+	public float velPower;
+	[Space(5)]
+	public float frictionAmount;
 
-    void Start()
-    {
-        
-    }
-    
-    void Update()
-    {
-        controller();
+	[Header("Jump")]
+	public float jumpForce;
+	[Range(0f, 1)] public float jumpCutMultiplier;
+	[Space(5)]
+	public float coyoteTime;
+	public float bufferTime;
+	[Space(5)]
+	public float gravityScale;
+	public float fallGravityMultiplier;
+	public float maxFallSpeed;
+	
+	[Header("Checks")]
+	public Transform groundCheckPoint;
+	public Vector2 groundCheckSize;
+	public LayerMask groundLayer;
 
+	[Header("Grapple")]
+	public GameObject grapplePrefab;
+	public Vector2 grapplePoint;
+	public float grappleRadius;
+	public bool isSwinging;
 
-    }
+	void Awake()
+	{
+		rb = GetComponent<Rigidbody2D>();
+	}
 
-    void FixedUpdate()
-    {
-        rb.velocity = new Vector2(Mathf.Lerp(rb.velocity.x, velX, isGrounded() ? groundFriction : airResistance), rb.velocity.y);
-    }
-    
-    void controller()
-    {
-        if (isGrounded())
-        {
-            coyote = 0.15f;
-        } else
-        {
-            coyote -= Time.deltaTime;
-        }
-        
-        if (Input.GetButtonDown("Jump"))
-        {
-            buffer = 0.1f;
-        } else
-        {
-            buffer -= Time.deltaTime;
-        }
+	void Update()
+	{
+		#region Movement
+		moveInput = Input.GetAxisRaw("Horizontal");
 
-        if (coyote > 0f && buffer > 0f)
-        {
-            isJumping = true;
-            jumpCounter = jumpTime;
-            //rb.velocity = new Vector2(rb.velocity.x, jumpSpeed);
-            buffer = 0f;
-        }
+		coyote -= Time.deltaTime;
+		buffer -= Time.deltaTime;
+		
+		if(Physics2D.OverlapBox(groundCheckPoint.position, groundCheckSize, 0f, groundLayer))
+		{
+			coyote = coyoteTime;
+		}
+		if(Input.GetButtonDown("Jump"))
+		{
+			buffer = bufferTime;
+		}
+		if(coyote > 0f && buffer > 0f && !isJumping)
+		{
+			Jump();
+		}
+		if(Input.GetButtonUp("Jump"))
+		{
+			OnJumpUp();
+		}
+		#endregion
 
-        if (isJumping)
-        {
-            if (jumpCounter > 0f)
-            {
-                rb.velocity = new Vector2(rb.velocity.x, jumpSpeed * jumpCounter / jumpTime);
-                jumpCounter -= Time.deltaTime;
-            } else
-            {
-                isJumping = false;
-                
-            }
+		#region Grapple
+		if(Input.GetMouseButtonDown(0))
+		{
+			OnGrappleDown();
+		}
+		if(isSwinging)
+		{
+			Grapple();
+		}
+		#endregion
+	}
 
-            if (Input.GetButtonUp("Jump"))
-            {
-                isJumping = false;
-                rb.velocity = new Vector2(rb.velocity.x, 0);
-            }
-        }
+	void FixedUpdate()
+	{
+		#region Run
+		float targetSpeed = moveInput * moveSpeed;
+		float speedDif = targetSpeed - rb.velocity.x;
+		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : decceleration;
+		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
+		rb.AddForce(movement * Vector2.right);
+		#endregion
 
-        /*if (rb.velocity.y < 0)
-        {
-            rb.velocity += Vector2.down * 1.2f * Time.deltaTime;
-        }*/
-        
-        velX = Input.GetAxisRaw("Horizontal") * speedX;
-    }
+		#region Friction
+		if(coyote > 0 && Mathf.Abs(moveInput) == 0f)
+		{
+			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
+			amount *= Mathf.Sign(rb.velocity.x);
+			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
+		}
+		#endregion
 
-    bool isGrounded()
-    {
-        raycast = Physics2D.BoxCast(new Vector3(transform.position.x, transform.position.y - 0.55f, 0), new Vector3(1, 0.1f, 1), 0f, Vector2.down, 0f, collisionLayers);
-        return raycast.collider != null;
-    }
+		#region Jump Gravity
+		if(rb.velocity.y < 0)
+		{
+			rb.gravityScale = gravityScale * fallGravityMultiplier;
+			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
+		} else
+		{
+			rb.gravityScale = gravityScale;
+		}
+		#endregion
+	}
+
+	void Jump()
+	{
+		rb.velocity = new Vector2(rb.velocity.x, jumpForce + (0.5f * Time.fixedDeltaTime * -gravityScale) / rb.mass);
+		coyote = 0f;
+		buffer = 0f;
+		isJumping = true;
+	}
+
+	void OnJumpUp()
+	{
+		if(rb.velocity.y > 0 && isJumping)
+		{
+			rb.AddForce(Vector2.down * rb.velocity.y * (1 - jumpCutMultiplier), ForceMode2D.Impulse);
+		}
+		isJumping = false;
+		buffer = 0f;
+	}
+
+	void Grapple()
+	{
+		
+		float radius = Vector2.Distance(transform.position, grapplePoint) - grappleRadius;
+		float theta = Mathf.Atan2(transform.position.y - grapplePoint.y, transform.position.x - grapplePoint.x);
+		transform.position += new Vector3((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1, 0);
+
+		if(Input.GetMouseButtonUp(0))
+		{
+			isSwinging = false;
+		}
+	}
+
+	void OnGrappleDown()
+	{
+		isSwinging = true;
+		grapplePoint = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+		grappleRadius = Vector2.Distance(transform.position, grapplePoint);
+		GameObject currentPrefab = Instantiate(grapplePrefab);
+		currentPrefab.GetComponent<Rope>().player = this;
+	}
 }
