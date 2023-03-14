@@ -154,6 +154,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18c23075ef8d206429924123ac546d97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  avgFrameRate: 0
   moveSpeed: 9
   acceleration: 13
   decceleration: 16
@@ -172,9 +173,12 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   grapplePrefab: {fileID: 4091299313004935833, guid: 2b82373813a6b9445a35b39c01866d71, type: 3}
+  swingAcceleration: 1
+  swingDecceleration: 1
   grapplePoint: {x: 0, y: 0}
   grappleRadius: 0
   isSwinging: 0
+  inGrappleMode: 0
 --- !u!50 &360092400
 Rigidbody2D:
   serializedVersion: 4

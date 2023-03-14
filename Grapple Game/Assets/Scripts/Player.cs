@@ -13,6 +13,8 @@ public class Player : MonoBehaviour
 	float buffer;
 	bool isJumping;
 	
+	public float avgFrameRate;
+	
 	[Header("Run")]
 	public float moveSpeed;
 	public float acceleration;
@@ -39,9 +41,14 @@ public class Player : MonoBehaviour
 
 	[Header("Grapple")]
 	public GameObject grapplePrefab;
-	public Vector2 grapplePoint;
-	public float grappleRadius;
-	public bool isSwinging;
+	public float swingAcceleration;
+	public float swingDecceleration;
+	[HideInInspector] public Vector2 grapplePoint;
+	[HideInInspector] public float grappleRadius;
+	[HideInInspector] public bool isSwinging;
+	[HideInInspector] public bool inGrappleMode;
+	Vector3 pastPos;
+		
 
 	void Awake()
 	{
@@ -50,6 +57,8 @@ public class Player : MonoBehaviour
 
 	void Update()
 	{
+		avgFrameRate = Time.frameCount / Time.time;
+		
 		#region Movement
 		moveInput = Input.GetAxisRaw("Horizontal");
 
@@ -59,6 +68,7 @@ public class Player : MonoBehaviour
 		if(Physics2D.OverlapBox(groundCheckPoint.position, groundCheckSize, 0f, groundLayer))
 		{
 			coyote = coyoteTime;
+			inGrappleMode = false;
 		}
 		if(Input.GetButtonDown("Jump"))
 		{
@@ -91,7 +101,7 @@ public class Player : MonoBehaviour
 		#region Run
 		float targetSpeed = moveInput * moveSpeed;
 		float speedDif = targetSpeed - rb.velocity.x;
-		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : decceleration;
+		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
 		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
 		rb.AddForce(movement * Vector2.right);
 		#endregion
@@ -137,10 +147,21 @@ public class Player : MonoBehaviour
 
 	void Grapple()
 	{
-		
-		float radius = Vector2.Distance(transform.position, grapplePoint) - grappleRadius;
-		float theta = Mathf.Atan2(transform.position.y - grapplePoint.y, transform.position.x - grapplePoint.x);
-		transform.position += new Vector3((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1, 0);
+		inGrappleMode = true;
+		if(Vector2.Distance(transform.position, grapplePoint) < grappleRadius)
+		{
+			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
+		} else if(Vector2.Distance(transform.position, grapplePoint) > grappleRadius)
+		{
+			float radius = Vector2.Distance(transform.position, grapplePoint) - grappleRadius;
+			float theta = Mathf.Atan2(transform.position.y - grapplePoint.y, transform.position.x - grapplePoint.x);
+			transform.position += new Vector3((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1, 0);
+
+			radius = Vector2.Distance(Vector2.zero, rb.velocity);
+			theta = Mathf.Atan2(pastPos.y - transform.position.y, pastPos.x - transform.position.x);
+			rb.velocity = new Vector2((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1);
+		}
+		pastPos = transform.position;
 
 		if(Input.GetMouseButtonUp(0))
 		{
