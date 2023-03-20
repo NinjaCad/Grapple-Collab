@@ -14,6 +14,9 @@ public class Player : MonoBehaviour
 	bool isJumping;
 	
 	public float avgFrameRate;
+
+	DistanceJoint2D joint;
+	Vector2 grappleBetterPoint;
 	
 	[Header("Run")]
 	public float moveSpeed;
@@ -55,6 +58,11 @@ public class Player : MonoBehaviour
 		rb = GetComponent<Rigidbody2D>();
 	}
 
+	void Start()
+	{
+		joint = GetComponent<DistanceJoint2D>();
+	}
+
 	void Update()
 	{
 		avgFrameRate = Time.frameCount / Time.time;
@@ -83,16 +91,18 @@ public class Player : MonoBehaviour
 			OnJumpUp();
 		}
 		#endregion
-
+		
 		#region Grapple
-		if(Input.GetMouseButtonDown(0))
+		AwesomeBetterGrapple();
+
+		/*if(Input.GetMouseButtonDown(0))
 		{
 			OnGrappleDown();
 		}
 		if(isSwinging)
 		{
 			Grapple();
-		}
+		}*/
 		#endregion
 	}
 
@@ -103,7 +113,10 @@ public class Player : MonoBehaviour
 		float speedDif = targetSpeed - rb.velocity.x;
 		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
 		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
-		rb.AddForce(movement * Vector2.right);
+		if (!Input.GetMouseButton(0))
+		{
+			rb.AddForce(movement * Vector2.right);
+		}
 		#endregion
 
 		#region Friction
@@ -111,12 +124,15 @@ public class Player : MonoBehaviour
 		{
 			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
 			amount *= Mathf.Sign(rb.velocity.x);
-			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
+			if (!Input.GetMouseButton(0))
+			{
+				rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
+			}
 		}
 		#endregion
 
 		#region Jump Gravity
-		if(rb.velocity.y < 0)
+		if(rb.velocity.y < 0 && !Input.GetMouseButton(0))
 		{
 			rb.gravityScale = gravityScale * fallGravityMultiplier;
 			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
@@ -176,5 +192,23 @@ public class Player : MonoBehaviour
 		grappleRadius = Vector2.Distance(transform.position, grapplePoint);
 		GameObject currentPrefab = Instantiate(grapplePrefab);
 		currentPrefab.GetComponent<Rope>().player = this;
+	}
+
+	void AwesomeBetterGrapple()
+	{
+		if (Input.GetMouseButtonDown(0))
+        {
+            grappleBetterPoint = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        }
+
+        if (Input.GetMouseButton(0))
+        {
+            joint.connectedAnchor = grappleBetterPoint;
+            joint.distance = Vector2.Distance(transform.position, grappleBetterPoint);
+            joint.enabled = true;
+        } else
+        {
+            joint.enabled = false;
+        }
 	}
 }
