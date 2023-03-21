@@ -175,7 +175,7 @@ MonoBehaviour:
     m_Bits: 128
   grapplePrefab: {fileID: 4091299313004935833, guid: 2b82373813a6b9445a35b39c01866d71, type: 3}
   swingAcceleration: 1
-  swingDecceleration: 1
+  swingDecceleration: 0.5
   grapplePoint: {x: 0, y: 0}
   grappleRadius: 0
   isSwinging: 0
@@ -251,7 +251,7 @@ DistanceJoint2D:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 360092398}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 4
   m_EnableCollision: 1
   m_ConnectedRigidBody: {fileID: 0}

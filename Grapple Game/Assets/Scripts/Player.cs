@@ -13,11 +13,6 @@ public class Player : MonoBehaviour
 	float buffer;
 	bool isJumping;
 	
-	public float avgFrameRate;
-
-	DistanceJoint2D joint;
-	Vector2 grappleBetterPoint;
-	
 	[Header("Run")]
 	public float moveSpeed;
 	public float acceleration;
@@ -46,11 +41,11 @@ public class Player : MonoBehaviour
 	public GameObject grapplePrefab;
 	public float swingAcceleration;
 	public float swingDecceleration;
+	DistanceJoint2D joint;
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
 	[HideInInspector] public bool isSwinging;
 	[HideInInspector] public bool inGrappleMode;
-	Vector3 pastPos;
 		
 
 	void Awake()
@@ -65,10 +60,12 @@ public class Player : MonoBehaviour
 
 	void Update()
 	{
-		avgFrameRate = Time.frameCount / Time.time;
-		
 		#region Movement
 		moveInput = Input.GetAxisRaw("Horizontal");
+		if(moveInput != 0 && moveInput != Mathf.Sign(rb.velocity.x))
+		{
+			inGrappleMode = false;
+		}
 
 		coyote -= Time.deltaTime;
 		buffer -= Time.deltaTime;
@@ -93,16 +90,14 @@ public class Player : MonoBehaviour
 		#endregion
 		
 		#region Grapple
-		AwesomeBetterGrapple();
-
-		/*if(Input.GetMouseButtonDown(0))
+		if(Input.GetMouseButtonDown(0))
 		{
 			OnGrappleDown();
 		}
 		if(isSwinging)
 		{
 			Grapple();
-		}*/
+		}
 		#endregion
 	}
 
@@ -113,10 +108,7 @@ public class Player : MonoBehaviour
 		float speedDif = targetSpeed - rb.velocity.x;
 		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
 		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
-		if (!Input.GetMouseButton(0))
-		{
-			rb.AddForce(movement * Vector2.right);
-		}
+		rb.AddForce(movement * Vector2.right);
 		#endregion
 
 		#region Friction
@@ -124,10 +116,7 @@ public class Player : MonoBehaviour
 		{
 			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
 			amount *= Mathf.Sign(rb.velocity.x);
-			if (!Input.GetMouseButton(0))
-			{
-				rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
-			}
+			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
 		}
 		#endregion
 
@@ -167,48 +156,24 @@ public class Player : MonoBehaviour
 		if(Vector2.Distance(transform.position, grapplePoint) < grappleRadius)
 		{
 			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
-		} else if(Vector2.Distance(transform.position, grapplePoint) > grappleRadius)
-		{
-			float radius = Vector2.Distance(transform.position, grapplePoint) - grappleRadius;
-			float theta = Mathf.Atan2(transform.position.y - grapplePoint.y, transform.position.x - grapplePoint.x);
-			transform.position += new Vector3((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1, 0);
-
-			radius = Vector2.Distance(Vector2.zero, rb.velocity);
-			theta = Mathf.Atan2(pastPos.y - transform.position.y, pastPos.x - transform.position.x);
-			rb.velocity = new Vector2((radius * Mathf.Cos(theta)) * -1, (radius * Mathf.Sin(theta)) * -1);
+			joint.distance = grappleRadius;
 		}
-		pastPos = transform.position;
-
 		if(Input.GetMouseButtonUp(0))
 		{
 			isSwinging = false;
+			joint.enabled = false;
 		}
 	}
 
 	void OnGrappleDown()
 	{
 		isSwinging = true;
+		joint.enabled = true;
 		grapplePoint = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+		joint.connectedAnchor = grapplePoint;
 		grappleRadius = Vector2.Distance(transform.position, grapplePoint);
+		joint.distance = grappleRadius;
 		GameObject currentPrefab = Instantiate(grapplePrefab);
 		currentPrefab.GetComponent<Rope>().player = this;
-	}
-
-	void AwesomeBetterGrapple()
-	{
-		if (Input.GetMouseButtonDown(0))
-        {
-            grappleBetterPoint = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        }
-
-        if (Input.GetMouseButton(0))
-        {
-            joint.connectedAnchor = grappleBetterPoint;
-            joint.distance = Vector2.Distance(transform.position, grappleBetterPoint);
-            joint.enabled = true;
-        } else
-        {
-            joint.enabled = false;
-        }
 	}
 }
