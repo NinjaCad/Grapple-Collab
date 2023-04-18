@@ -15,6 +15,7 @@ public class Rope : MonoBehaviour
     [SerializeField] float gravityScale;
     
     bool isCut;
+    bool isPull;
     [SerializeField] float fullTime;
     [SerializeField] float invisTime;
     float timeAfterCut;
@@ -39,7 +40,7 @@ public class Rope : MonoBehaviour
 
     void Update()
     {
-        if(player.isSwinging == false && isCut == false)
+        if(!player.isSwinging && !player.isPulling && isCut == false)
         {
             isCut = true;
             joint.enabled = true;
@@ -47,6 +48,14 @@ public class Rope : MonoBehaviour
             rb.velocity = player.GetComponent<Rigidbody2D>().velocity;
             rb.gravityScale = gravityScale;
             joint.connectedAnchor = ownGrapplePoint;
+        } else if(!player.isSwinging && player.isPulling)
+        {
+            isPull = true;
+        }
+
+        if(isPull && !player.isPulling)
+        {
+            Destroy(this.gameObject);
         }
 
         if(isCut == false)

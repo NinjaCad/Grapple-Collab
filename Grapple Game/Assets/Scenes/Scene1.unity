@@ -138,7 +138,7 @@ GameObject:
   - component: {fileID: 360092404}
   m_Layer: 0
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -155,7 +155,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18c23075ef8d206429924123ac546d97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  avgFrameRate: 0
   moveSpeed: 9
   acceleration: 13
   decceleration: 16
@@ -180,6 +179,10 @@ MonoBehaviour:
   grappleRadius: 0
   isSwinging: 0
   inGrappleMode: 0
+  minPullSpeed: 30
+  isPulling: 0
+  timeToPoint: 0
+  timeAfterPull: 0
 --- !u!50 &360092400
 Rigidbody2D:
   serializedVersion: 4

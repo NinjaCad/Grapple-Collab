@@ -5,6 +5,7 @@ using UnityEngine;
 public class Player : MonoBehaviour
 {
 	Rigidbody2D rb;
+	DistanceJoint2D joint;
 
 	RaycastHit2D raycast;
 
@@ -12,6 +13,7 @@ public class Player : MonoBehaviour
 	float coyote;
 	float buffer;
 	bool isJumping;
+	bool onGround;
 	
 	[Header("Run")]
 	public float moveSpeed;
@@ -41,12 +43,15 @@ public class Player : MonoBehaviour
 	public GameObject grapplePrefab;
 	public float swingAcceleration;
 	public float swingDecceleration;
-	DistanceJoint2D joint;
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
 	[HideInInspector] public bool isSwinging;
 	[HideInInspector] public bool inGrappleMode;
-		
+	[Space(5)]
+	public float minPullSpeed;
+	[HideInInspector] public bool isPulling;
+	[HideInInspector] public float timeToPoint;
+	[HideInInspector] public float timeAfterPull;
 
 	void Awake()
 	{
@@ -74,6 +79,11 @@ public class Player : MonoBehaviour
 		{
 			coyote = coyoteTime;
 			inGrappleMode = false;
+			onGround = true;
+		} else if(onGround == true)
+		{
+			onGround = false;
+			OnGrappleRestart();
 		}
 		if(Input.GetButtonDown("Jump"))
 		{
@@ -90,7 +100,7 @@ public class Player : MonoBehaviour
 		#endregion
 		
 		#region Grapple
-		if(Input.GetMouseButtonDown(0))
+		if(Input.GetMouseButtonDown(0) && !isPulling)
 		{
 			OnGrappleDown();
 		}
@@ -98,38 +108,55 @@ public class Player : MonoBehaviour
 		{
 			Grapple();
 		}
+		if(isPulling)
+		{
+			Pull();
+		}
 		#endregion
 	}
 
 	void FixedUpdate()
 	{
-		#region Run
-		float targetSpeed = moveInput * moveSpeed;
-		float speedDif = targetSpeed - rb.velocity.x;
-		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
-		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
-		rb.AddForce(movement * Vector2.right);
-		#endregion
+		if(!isPulling)
+		{
+			#region Run
+			float targetSpeed = moveInput * moveSpeed;
+			float speedDif = targetSpeed - rb.velocity.x;
+			float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
+			float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
+			rb.AddForce(movement * Vector2.right);
+			#endregion
 
-		#region Friction
-		if(coyote > 0 && Mathf.Abs(moveInput) == 0f)
-		{
-			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
-			amount *= Mathf.Sign(rb.velocity.x);
-			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
-		}
-		#endregion
+			#region Friction
+			if(coyote > 0 && Mathf.Abs(moveInput) == 0f)
+			{
+				float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
+				amount *= Mathf.Sign(rb.velocity.x);
+				rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
+			}
+			#endregion
 
-		#region Jump Gravity
-		if(rb.velocity.y < 0 && !Input.GetMouseButton(0))
-		{
-			rb.gravityScale = gravityScale * fallGravityMultiplier;
-			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
-		} else
-		{
-			rb.gravityScale = gravityScale;
+			#region Jump Gravity
+			if(rb.velocity.y < 0 && !isSwinging)
+			{
+				rb.gravityScale = gravityScale * fallGravityMultiplier;
+				rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
+				isJumping = false;
+			} else
+			{
+				rb.gravityScale = gravityScale;
+			}
+
+			if(rb.velocity.y < 0 && isJumping)
+			{
+				isJumping = false;
+				OnGrappleRestart();
+			} else if(rb.velocity.y < 0)
+			{
+				isJumping = false;
+			}
+			#endregion
 		}
-		#endregion
 	}
 
 	void Jump()
@@ -148,20 +175,62 @@ public class Player : MonoBehaviour
 		}
 		isJumping = false;
 		buffer = 0f;
+		OnGrappleRestart();
 	}
 
 	void Grapple()
 	{
-		inGrappleMode = true;
-		if(Vector2.Distance(transform.position, grapplePoint) < grappleRadius)
+		if(!onGround && !isJumping)
 		{
-			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
-			joint.distance = grappleRadius;
+			inGrappleMode = true;
+			if(Vector2.Distance(transform.position, grapplePoint) < grappleRadius)
+			{
+				grappleRadius = Vector2.Distance(transform.position, grapplePoint);
+				joint.distance = grappleRadius;
+			}
+		} else
+		{
+			joint.enabled = false;
+			inGrappleMode = false;
 		}
+		
 		if(Input.GetMouseButtonUp(0))
 		{
 			isSwinging = false;
 			joint.enabled = false;
+		}
+		if(Input.GetMouseButtonDown(1))
+		{
+			isJumping = false;
+			isSwinging = false;
+			isPulling = true;
+			joint.enabled = false;
+			rb.gravityScale = 0f;
+
+			float radius = Mathf.Max(minPullSpeed, Vector2.Distance(Vector2.zero, rb.velocity));
+			float theta = Mathf.Atan2(grapplePoint.y - transform.position.y, grapplePoint.x - transform.position.x);
+			rb.velocity = new Vector2(radius * Mathf.Cos(theta), radius * Mathf.Sin(theta));
+			timeToPoint = Vector2.Distance(grapplePoint, transform.position) / radius;
+			timeAfterPull = 0.0f;
+		}
+	}
+
+	void Pull()
+	{
+		timeAfterPull += Time.deltaTime;
+		if(timeAfterPull >= timeToPoint)
+		{
+			isPulling = false;
+		}
+	}
+
+	void OnGrappleRestart()
+	{
+		if(isSwinging)
+		{
+			joint.enabled = true;
+			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
+			joint.distance = grappleRadius;
 		}
 	}
 
