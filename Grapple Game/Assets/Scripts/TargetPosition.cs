@@ -4,10 +4,6 @@ using UnityEngine;
 
 public class TargetPosition : MonoBehaviour
 {
-    public Vector2 grappleBounds;
-
-    void Start()
-    {
-        grappleBounds = transform.position;
-    }
+    public Vector2 minGrappleBounds;
+    public Vector2 maxGrappleBounds;
 }

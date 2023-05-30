@@ -6,6 +6,7 @@ public class Player : MonoBehaviour
 {
 	Rigidbody2D rb;
 	DistanceJoint2D joint;
+	Rope ropeScript;
 
 	RaycastHit2D raycast;
 
@@ -14,6 +15,15 @@ public class Player : MonoBehaviour
 	float buffer;
 	bool isJumping;
 	bool onGround;
+
+	[HideInInspector] public Vector2 grapplePoint;
+	[HideInInspector] public float grappleRadius;
+	[HideInInspector] public bool isHeld;
+	[HideInInspector] public bool isGrappled;
+	[HideInInspector] public bool inGrappleAccel;
+	[HideInInspector] public bool isHanging;
+	[HideInInspector] public float pullSpeed;
+	[HideInInspector] public bool isPulling;
 
 	Vector2 startPull;
 	float startPullDistance;
@@ -47,14 +57,8 @@ public class Player : MonoBehaviour
 	public float swingAcceleration;
 	public float swingDecceleration;
 	public LayerMask grappleLayers;
-	[HideInInspector] public Vector2 grapplePoint;
-	[HideInInspector] public float grappleRadius;
-	[HideInInspector] public bool isSwinging;
-	[HideInInspector] public bool inGrappleMode;
 	[Space(5)]
 	public float minPullSpeed;
-	[HideInInspector] public float pullSpeed;
-	[HideInInspector] public bool isPulling;
 
 	void Awake()
 	{
@@ -70,9 +74,9 @@ public class Player : MonoBehaviour
 	{
 		#region Movement
 		moveInput = Input.GetAxisRaw("Horizontal");
-		if(moveInput != 0 && moveInput != Mathf.Sign(rb.velocity.x) && !isSwinging)
+		if(moveInput != 0 && moveInput != Mathf.Sign(rb.velocity.x))
 		{
-			inGrappleMode = false;
+			inGrappleAccel = false;
 		}
 
 		coyote -= Time.deltaTime;
@@ -82,17 +86,10 @@ public class Player : MonoBehaviour
 		{
 			coyote = coyoteTime;
 			onGround = true;
-			if(!isSwinging)
-			{
-				inGrappleMode = false;
-			}
+			inGrappleAccel = false;
 		} else if(onGround == true)
 		{
 			onGround = false;
-			if(joint.enabled == false)
-			{
-				OnGrappleRestart();
-			}
 		}
 		if(Input.GetButtonDown("Jump"))
 		{
@@ -109,11 +106,11 @@ public class Player : MonoBehaviour
 		#endregion
 		
 		#region Grapple
-		if(Input.GetMouseButtonDown(0) && !isPulling)
+		if(Input.GetMouseButtonDown(0) && !isGrappled)
 		{
 			OnGrappleDown();
 		}
-		if(isSwinging)
+		if(isGrappled)
 		{
 			Grapple();
 		}
@@ -131,7 +128,7 @@ public class Player : MonoBehaviour
 			#region Run
 			float targetSpeed = moveInput * moveSpeed;
 			float speedDif = targetSpeed - rb.velocity.x;
-			float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleMode ? acceleration : swingAcceleration) : (!inGrappleMode ? decceleration : swingDecceleration);
+			float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? acceleration : swingAcceleration) : (!inGrappleAccel ? decceleration : swingDecceleration);
 			float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
 			rb.AddForce(movement * Vector2.right);
 			#endregion
@@ -146,7 +143,7 @@ public class Player : MonoBehaviour
 			#endregion
 
 			#region Jump Gravity
-			if(rb.velocity.y < 0 && !isSwinging)
+			if(rb.velocity.y < 0 && !(isGrappled && isHanging))
 			{
 				rb.gravityScale = gravityScale * fallGravityMultiplier;
 				rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
@@ -165,7 +162,6 @@ public class Player : MonoBehaviour
 		coyote = 0f;
 		buffer = 0f;
 		isJumping = true;
-		OnGrappleRestart();
 	}
 
 	void OnJumpUp()
@@ -180,30 +176,29 @@ public class Player : MonoBehaviour
 
 	void Grapple()
 	{
-		if(onGround && rb.velocity.y <= 0f)
-		{
-			inGrappleMode = false;
-			joint.enabled = false;
-		} else if(joint.enabled == true)
-		{
-			if(Mathf.Approximately(Vector2.Distance(transform.position, grapplePoint), joint.distance))
-			{
-				inGrappleMode = true;
-			} else
-			{
-				inGrappleMode = false;
-			}
-		}
+		ropeScript.points[ropeScript.points.Count - 1].pastPos = ropeScript.points[ropeScript.points.Count - 1].currentPos;
+		ropeScript.points[ropeScript.points.Count - 1].currentPos = transform.position;
 		
 		if(Input.GetMouseButtonUp(0))
 		{
-			isSwinging = false;
+			isGrappled = false;
 			joint.enabled = false;
+			OnGrappleUp();
+			return;
 		}
-		if(Input.GetMouseButtonDown(1))
+
+		if(Vector2.Distance(transform.position, grapplePoint) >= grappleRadius - 0.1f && !onGround)
+		{
+			inGrappleAccel = true;
+			isHanging = true;
+		} else
+		{
+			isHanging = false;
+		}
+
+		if(Input.GetButtonDown("Pull") || Input.GetMouseButtonDown(1))
 		{
 			isJumping = false;
-			isSwinging = false;
 			isPulling = true;
 			joint.enabled = false;
 			rb.gravityScale = 0f;
@@ -222,24 +217,19 @@ public class Player : MonoBehaviour
 
 	void Pull()
 	{
-		Vector2 targetSpeed = Vector2.LerpUnclamped(transform.position, grapplePoint, pullSpeed / Vector2.Distance(transform.position, grapplePoint));
-		Vector2 speedDif = targetSpeed - rb.velocity;
-		rb.AddForce(speedDif);
-
-		if(Vector2.Distance(transform.position, startPull) >= startPullDistance)
+		if(Vector2.Distance(transform.position, startPull) >= startPullDistance - 0.5f)
 		{
 			isPulling = false;
+			isGrappled = false;
+			inGrappleAccel = true;
+			return;
 		}
-	}
+		
+		Vector2 targetSpeed = Vector2.LerpUnclamped(transform.position, grapplePoint, pullSpeed / Vector2.Distance(transform.position, grapplePoint));
+		Vector2 speedDif = targetSpeed - rb.velocity;
+		rb.AddForce(Vector2.Lerp(Vector2.zero, speedDif, 0.5f), ForceMode2D.Impulse);
 
-	void OnGrappleRestart()
-	{
-		if(isSwinging)
-		{
-			joint.enabled = true;
-			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
-			joint.distance = grappleRadius;
-		}
+		
 	}
 
 	void OnGrappleDown()
@@ -250,15 +240,50 @@ public class Player : MonoBehaviour
 		RaycastHit2D raycast = Physics2D.Raycast(transform.position, direction, 50f, grappleLayers);
 		if(raycast.collider != null)
 		{
-			inGrappleMode = true;
-			isSwinging = true;
-			joint.enabled = true;
-			grapplePoint = raycast.collider.gameObject.GetComponentInParent<TargetPosition>().grappleBounds;
+			isGrappled = true;
+			TargetPosition hitCollider = raycast.collider.gameObject.GetComponentInParent<TargetPosition>();
+			grapplePoint = new Vector2(Mathf.Clamp(raycast.point.x, hitCollider.gameObject.transform.position.x + hitCollider.minGrappleBounds.x, hitCollider.gameObject.transform.position.x + hitCollider.maxGrappleBounds.x), Mathf.Clamp(raycast.point.y, hitCollider.gameObject.transform.position.y + hitCollider.minGrappleBounds.y, hitCollider.gameObject.transform.position.y + hitCollider.maxGrappleBounds.y));
 			joint.connectedAnchor = grapplePoint;
+			joint.enabled = true;
 			grappleRadius = Vector2.Distance(transform.position, grapplePoint);
 			joint.distance = grappleRadius;
-			GameObject currentPrefab = Instantiate(grapplePrefab);
-			currentPrefab.GetComponent<Rope>().player = this;
+			CreateRope();
 		}
+	}
+
+	void OnGrappleUp()
+	{
+		ropeScript.points[ropeScript.points.Count - 1].isLocked = false;
+		for(int i = 0; i < ropeScript.lines.Count; i++)
+		{
+			ropeScript.lines[i].lineLength = Vector2.Distance(ropeScript.points[ropeScript.lines[i].pointIndexes.x].currentPos, ropeScript.points[ropeScript.lines[i].pointIndexes.y].currentPos);
+		}
+	}
+
+	void CreateRope()
+	{
+		GameObject currentPrefab = Instantiate(grapplePrefab);
+		ropeScript = currentPrefab.GetComponent<Rope>();
+		ropeScript.player = this;
+
+		ropeScript.points.Add(new Point());
+		ropeScript.points[0].currentPos = grapplePoint;
+		ropeScript.points[0].isLocked = true;
+
+		for(float i = 0.5f; i < grappleRadius; i += 0.5f)
+		{
+			ropeScript.points.Add(new Point());
+			ropeScript.points[(int) (i * 2)].currentPos = Vector2.Lerp(grapplePoint, transform.position, i / grappleRadius);
+			ropeScript.lines.Add(new Line());
+			ropeScript.lines[(int) (i * 2) - 1].pointIndexes = new Vector2Int((int) (i * 2), (int) (i * 2) - 1);
+			ropeScript.lines[(int) (i * 2) - 1].lineLength = 0.3f;
+		}
+
+		ropeScript.points.Add(new Point());
+		ropeScript.points[ropeScript.points.Count - 1].currentPos = transform.position;
+		ropeScript.points[ropeScript.points.Count - 1].isLocked = true;
+		ropeScript.lines.Add(new Line());
+		ropeScript.lines[ropeScript.lines.Count - 1].pointIndexes = new Vector2Int(ropeScript.points.Count - 1, ropeScript.points.Count - 2);
+		ropeScript.lines[ropeScript.lines.Count - 1].lineLength = grappleRadius % 0.5f;
 	}
 }
