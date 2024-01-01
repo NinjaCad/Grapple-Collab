@@ -13,11 +13,11 @@ public class Rope : MonoBehaviour
     [Header("Swing")]
     [SerializeField] float gravityScale;
     
-    bool isCut;
+    bool isReleased;
     bool isPull;
     [SerializeField] float fullTime;
     [SerializeField] float invisTime;
-    float timeAfterCut;
+    float timeAfterRelease;
 
     Vector2 ownGrapplePoint;
 
@@ -34,7 +34,7 @@ public class Rope : MonoBehaviour
         
         lineRenderer.startWidth = 0.15f;
         lineRenderer.endWidth = 0.15f;
-        timeAfterCut = 0.0f;
+        timeAfterRelease = 0.0f;
     }
 
     void FixedUpdate()
@@ -53,9 +53,9 @@ public class Rope : MonoBehaviour
         lineRenderer.positionCount = pointPositions.Length;
         lineRenderer.SetPositions(pointPositions);
         
-        if(!player.isGrappled && isCut == false)
+        if(!player.isGrappled && isReleased == false)
         {
-            isCut = true;
+            isReleased = true;
         } else if(player.isPulling)
         {
             isPull = true;
@@ -66,11 +66,11 @@ public class Rope : MonoBehaviour
             Destroy(this.gameObject);
         }
 
-        if(isCut)
+        if(isReleased)
         {
-            timeAfterCut += Time.deltaTime;
+            timeAfterRelease += Time.deltaTime;
             
-            if(timeAfterCut > fullTime)
+            if(timeAfterRelease > fullTime)
             {
                 Destroy(this.gameObject);
             }
@@ -84,7 +84,7 @@ public class Rope : MonoBehaviour
             if(!points[i].isLocked)
             {
                 Vector2 newPos = points[i].currentPos;
-                newPos += new Vector2(points[i].currentPos.x - points[i].pastPos.x, (points[i].currentPos.y - points[i].pastPos.y) - (Time.fixedDeltaTime * gravityScale));
+                newPos += new Vector2(points[i].currentPos.x - points[i].pastPos.x, points[i].currentPos.y - points[i].pastPos.y - (Time.fixedDeltaTime * gravityScale));
                 points[i].pastPos = points[i].currentPos;
                 points[i].currentPos = newPos;
             }
