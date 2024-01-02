@@ -56,14 +56,6 @@ public class Rope : MonoBehaviour
         if(!player.isGrappled && isReleased == false)
         {
             isReleased = true;
-        } else if(player.isPulling)
-        {
-            isPull = true;
-        }
-
-        if(isPull && !player.isPulling)
-        {
-            Destroy(this.gameObject);
         }
 
         if(isReleased)
