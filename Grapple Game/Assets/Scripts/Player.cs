@@ -11,19 +11,17 @@ public class Player : MonoBehaviour
 	float moveInput;
 	float coyote;
 	float buffer;
-	float wallJump;
+	float jumpDelay;
 	bool isJumping;
 	bool onGround;
 	int onWall;
+	float wallSlideSpeed;
 
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
 	[HideInInspector] public bool isGrappled;
 	[HideInInspector] public bool inGrappleAccel;
 	[HideInInspector] public bool isHanging;
-
-	Vector2 startPull;
-	float startPullDistance;
 	
 	[Header("Run")]
 	public float moveSpeed;
@@ -40,30 +38,33 @@ public class Player : MonoBehaviour
 	[Space(5)]
 	public float coyoteTime;
 	public float bufferTime;
-	public float wallJumpTime;
 	public float jumpDelayTime;
 	[Space(5)]
 	public float gravityScale;
 	public float fallGravityMultiplier;
 	public float maxFallSpeed;
-	public float wallSlideSpeed;
+	[Space(5)]
+	public float startWallSlideSpeed;
+	public float maxWallSlideSpeed;
+	public float wallSlideMultiplier;
 	
 	[Header("Checks")]
 	public Transform groundCheckPoint;
 	public Vector2 groundCheckSize;
+	public LayerMask groundLayer;
 	public Transform leftCheckPoint;
 	public Transform rightCheckPoint;
-	public Vector2 xCheckSize;
-	public LayerMask groundLayer;
+	public Vector2 wallCheckSize;
+	public LayerMask wallLayer;
 
 	[Header("Grapple")]
 	public GameObject grapplePrefab;
 	public float swingAcceleration;
 	public float swingDecceleration;
+	public float grappleRange;
 	public LayerMask grappleLayers;
 	[Space(5)]
-	public float pullSpeed;
-	public float grappleRange;
+	public float minPullSpeed;
 
 	void Awake()
 	{
@@ -71,75 +72,45 @@ public class Player : MonoBehaviour
 		joint = GetComponent<DistanceJoint2D>();
 	}
 
-	void Start()
-	{
-		
-	}
-
 	void Update()
 	{
 		#region Movement
 		moveInput = Input.GetAxisRaw("Horizontal");
-		if (moveInput == -Mathf.Sign(rb.velocity.x))
-		{
-			inGrappleAccel = false;
-		}
+		if (moveInput == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
 
 		coyote -= Time.deltaTime;
 		buffer -= Time.deltaTime;
-		wallJump -= Time.deltaTime;
+		jumpDelay -= Time.deltaTime;
 
-		if (Physics2D.OverlapBox(leftCheckPoint.position, xCheckSize, 0f, groundLayer))
+		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
+			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
+
+		if (onWall != 0 && rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			onWall = -1;
-		} else if ((Physics2D.OverlapBox(rightCheckPoint.position, xCheckSize, 0f, groundLayer)))
-		{
-			onWall = 1;
-		} else if (onWall != 0)
-		{
-			onWall = 0;
+			if (wallSlideSpeed == -1f) { wallSlideSpeed = startWallSlideSpeed; }
+			else { wallSlideSpeed = Mathf.Min((wallSlideSpeed + Time.deltaTime) * wallSlideMultiplier, maxWallSlideSpeed); }
 		}
+		else { wallSlideSpeed = -1f; }
 		
 		if (Physics2D.OverlapBox(groundCheckPoint.position, groundCheckSize, 0f, groundLayer))
 		{
 			coyote = coyoteTime;
 			onGround = true;
 			inGrappleAccel = false;
-		} else if (onGround)
-		{
-			onGround = false;
 		}
-		if (Input.GetButtonDown("Jump"))
-		{
-			buffer = bufferTime;
-		}
-		if (coyote > 0f && buffer > 0f && !isJumping)
-		{
-			Jump();
-		} else if (buffer > 0f && onWall != 0)
-		{
-			wallJump = wallJumpTime;
-			Jump();
-		}
-		if (wallJump > 0f)
-		{
-			WallJump();
-		}
-		if (Input.GetButtonUp("Jump"))
-		{
-			OnJumpUp();
-		}
+		else if (onGround) { onGround = false; }
+		
+		if (Input.GetButtonDown("Jump")) { buffer = bufferTime; }
+		
+		if (coyote > 0f && buffer > 0f && jumpDelay <= 0f && !isJumping) { Jump(); }
+		
+		if (Input.GetButtonUp("Jump")) { OnJumpUp(); }
 		#endregion
 		
 		#region Grapple
-		if (Input.GetMouseButtonDown(0) && !isGrappled)
-		{
-			OnGrappleDown();
-		}
-		if (isGrappled)
-		{
-			Grapple();
-		}
+		if (Input.GetMouseButtonDown(0) && !isGrappled) { OnGrappleDown(); }
+		
+		if (isGrappled) { Grapple(); }
 		#endregion
 	}
 
@@ -156,46 +127,36 @@ public class Player : MonoBehaviour
 		#region Friction
 		if (coyote > 0 && Mathf.Abs(moveInput) == 0f)
 		{
-			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), Mathf.Abs(frictionAmount));
-			amount *= Mathf.Sign(rb.velocity.x);
+			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), frictionAmount) * Mathf.Sign(rb.velocity.x);
 			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
 		}
 		#endregion
 
-		#region Jump Gravity
+		#region Gravity
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			rb.gravityScale = (onWall == 0 ? gravityScale * fallGravityMultiplier : wallSlideSpeed);
-			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
+			if (onWall == 0) { rb.gravityScale = gravityScale * fallGravityMultiplier; }
+			rb.velocity = new Vector2(rb.velocity.x, onWall == 0 ? Mathf.Max(rb.velocity.y, -maxFallSpeed) : -wallSlideSpeed);
 			isJumping = false;
-		} else
-		{
-			rb.gravityScale = gravityScale;
 		}
+		else { rb.gravityScale = gravityScale; }
 		#endregion
 	}
 
 	void Jump()
 	{
-		rb.velocity = new Vector2(rb.velocity.x, jumpForce + 0.5f * Time.fixedDeltaTime * -gravityScale / rb.mass);
+		rb.velocity = new Vector2(rb.velocity.x, jumpForce);
 		coyote = 0f;
 		buffer = 0f;
+		jumpDelay = jumpDelayTime;
 		isJumping = true;
 	}
 
 	void OnJumpUp()
 	{
-		if (rb.velocity.y > 0 && isJumping)
-		{
-			rb.AddForce(Vector2.down * rb.velocity.y * (1 - jumpCutMultiplier), ForceMode2D.Impulse);
-		}
+		if (rb.velocity.y > 0 && isJumping) { rb.AddForce(Vector2.down * rb.velocity.y * (1 - jumpCutMultiplier), ForceMode2D.Impulse); }
 		isJumping = false;
 		buffer = 0f;
-	}
-
-	void WallJump()
-	{
-		rb.AddForce(wallJumpForce * -onWall * Vector2.right);
 	}
 
 	void Grapple()
@@ -215,15 +176,10 @@ public class Player : MonoBehaviour
 		{
 			inGrappleAccel = true;
 			isHanging = true;
-		} else
-		{
-			isHanging = false;
 		}
+		else { isHanging = false; }
 
-		if (Input.GetButtonDown("Pull") || Input.GetMouseButtonDown(1))
-		{
-			Pull();
-		}
+		if (Input.GetButtonDown("Pull") || Input.GetMouseButtonDown(1)) { Pull(); }
 	}
 
 	void Pull()
@@ -231,13 +187,13 @@ public class Player : MonoBehaviour
 		isJumping = false;
 		joint.enabled = false;
 		inGrappleAccel = true;
-		rb.velocity = (grapplePoint - (Vector2)transform.position).normalized * pullSpeed;
+		rb.velocity = (grapplePoint - (Vector2) transform.position).normalized * Mathf.Max(minPullSpeed, rb.velocity.magnitude);
 	}
 
 	void OnGrappleDown()
 	{
 		Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-		Vector2 direction = new Vector2(mousePos.x - transform.position.x, mousePos.y - transform.position.y).normalized;
+		Vector2 direction = (mousePos - (Vector2) transform.position).normalized;
 		RaycastHit2D raycast = Physics2D.Raycast(transform.position, direction, grappleRange, grappleLayers);
 		if (raycast.collider != null)
 		{
