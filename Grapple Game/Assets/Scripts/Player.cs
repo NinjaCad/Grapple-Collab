@@ -15,7 +15,8 @@ public class Player : MonoBehaviour
 	bool isJumping;
 	bool onGround;
 	int onWall;
-	float wallSlideSpeed;
+	bool isClinging;
+	bool resetVelocity;
 
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
@@ -44,9 +45,9 @@ public class Player : MonoBehaviour
 	public float fallGravityMultiplier;
 	public float maxFallSpeed;
 	[Space(5)]
+	public float wallSlideGravity;
 	public float startWallSlideSpeed;
 	public float maxWallSlideSpeed;
-	public float wallSlideMultiplier;
 	
 	[Header("Checks")]
 	public Transform groundCheckPoint;
@@ -84,13 +85,17 @@ public class Player : MonoBehaviour
 
 		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
 			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
-
-		if (onWall != 0 && rb.velocity.y < 0 && !(isGrappled && isHanging))
+		isClinging = onWall != 0 && moveInput == onWall;
+		
+		if (isClinging && rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			if (wallSlideSpeed == -1f) { wallSlideSpeed = startWallSlideSpeed; }
-			else { wallSlideSpeed = Mathf.Min((wallSlideSpeed + Time.deltaTime) * wallSlideMultiplier, maxWallSlideSpeed); }
+			if (!resetVelocity)
+			{
+				rb.velocity = new Vector2(rb.velocity.x, -startWallSlideSpeed);
+				resetVelocity = true;
+			}
 		}
-		else { wallSlideSpeed = -1f; }
+		else { resetVelocity = false; }
 		
 		if (Physics2D.OverlapBox(groundCheckPoint.position, groundCheckSize, 0f, groundLayer))
 		{
@@ -135,8 +140,8 @@ public class Player : MonoBehaviour
 		#region Gravity
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			if (onWall == 0) { rb.gravityScale = gravityScale * fallGravityMultiplier; }
-			rb.velocity = new Vector2(rb.velocity.x, onWall == 0 ? Mathf.Max(rb.velocity.y, -maxFallSpeed) : -wallSlideSpeed);
+			rb.gravityScale = !isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity;
+			rb.velocity = new Vector2(rb.velocity.x, !isClinging ? Mathf.Max(rb.velocity.y, -maxFallSpeed) : Mathf.Max(rb.velocity.y, -maxWallSlideSpeed));
 			isJumping = false;
 		}
 		else { rb.gravityScale = gravityScale; }
@@ -247,8 +252,8 @@ public class Player : MonoBehaviour
 	}
 }
 
-// ground and grapple delay
-// clean up code
+// fast fall and fast slide
+// wall jump
 // make level
 // make level mechanics
 // fix pull length and floor thing
