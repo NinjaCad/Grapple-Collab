@@ -10,6 +10,8 @@ public class Player : MonoBehaviour
 
 	float moveInput;
 	float coyote;
+	float rightCoyote;
+	float leftCoyote;
 	float buffer;
 	float jumpDelay;
 	bool isJumping;
@@ -17,6 +19,7 @@ public class Player : MonoBehaviour
 	int onWall;
 	bool isClinging;
 	bool resetVelocity;
+	int inWallJump;
 
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
@@ -34,10 +37,12 @@ public class Player : MonoBehaviour
 
 	[Header("Jump")]
 	public float jumpForce;
-	public float wallJumpForce;
+	public Vector2 wallJumpForce;
 	[Range(0f, 1)] public float jumpCutMultiplier;
+	public float wallJumpDecceleration;
 	[Space(5)]
 	public float coyoteTime;
+	public float wallCoyoteTime;
 	public float bufferTime;
 	public float jumpDelayTime;
 	[Space(5)]
@@ -53,6 +58,7 @@ public class Player : MonoBehaviour
 	public Transform groundCheckPoint;
 	public Vector2 groundCheckSize;
 	public LayerMask groundLayer;
+	[Space(5)]
 	public Transform leftCheckPoint;
 	public Transform rightCheckPoint;
 	public Vector2 wallCheckSize;
@@ -77,15 +83,23 @@ public class Player : MonoBehaviour
 	{
 		#region Movement
 		moveInput = Input.GetAxisRaw("Horizontal");
+
+		if (inWallJump != 0 && inWallJump == moveInput) { moveInput = 0; }
+
 		if (moveInput == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
 
 		coyote -= Time.deltaTime;
+		rightCoyote -= Time.deltaTime;
+		leftCoyote -= Time.deltaTime;
 		buffer -= Time.deltaTime;
 		jumpDelay -= Time.deltaTime;
 
 		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
 			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
 		isClinging = onWall != 0 && moveInput == onWall;
+
+		if (onWall == -1 && isClinging) { leftCoyote = wallCoyoteTime; }
+		else if (onWall == 1 && isClinging) { rightCoyote = wallCoyoteTime; }
 		
 		if (isClinging && rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
@@ -107,7 +121,15 @@ public class Player : MonoBehaviour
 		
 		if (Input.GetButtonDown("Jump")) { buffer = bufferTime; }
 		
-		if (coyote > 0f && buffer > 0f && jumpDelay <= 0f && !isJumping) { Jump(); }
+		if (buffer > 0f && jumpDelay <= 0f && !isJumping)
+		{
+			if (coyote > 0f) { Jump(); }
+			else if (rightCoyote > 0f || leftCoyote > 0f)
+			{
+				if (leftCoyote > rightCoyote) { WallJump(1); }
+				else { WallJump(-1); }
+			}
+		}
 		
 		if (Input.GetButtonUp("Jump")) { OnJumpUp(); }
 		#endregion
@@ -124,7 +146,7 @@ public class Player : MonoBehaviour
 		#region Run
 		float targetSpeed = moveInput * moveSpeed;
 		float speedDif = targetSpeed - rb.velocity.x;
-		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? acceleration : swingAcceleration) : (!inGrappleAccel ? decceleration : swingDecceleration);
+		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? acceleration : swingAcceleration) : (inWallJump == 0 ? (!inGrappleAccel ? decceleration : swingDecceleration) : wallJumpDecceleration);
 		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
 		rb.AddForce(movement * Vector2.right);
 		#endregion
@@ -141,8 +163,9 @@ public class Player : MonoBehaviour
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
 			rb.gravityScale = !isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity;
-			rb.velocity = new Vector2(rb.velocity.x, !isClinging ? Mathf.Max(rb.velocity.y, -maxFallSpeed) : Mathf.Max(rb.velocity.y, -maxWallSlideSpeed));
+			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, !isClinging ? -maxFallSpeed : -maxWallSlideSpeed));
 			isJumping = false;
+			inWallJump = 0;
 		}
 		else { rb.gravityScale = gravityScale; }
 		#endregion
@@ -155,6 +178,19 @@ public class Player : MonoBehaviour
 		buffer = 0f;
 		jumpDelay = jumpDelayTime;
 		isJumping = true;
+	}
+
+	void WallJump(int dir)
+	{
+		rb.velocity = new Vector2(wallJumpForce.x * dir, wallJumpForce.y);
+		rightCoyote = 0f;
+		leftCoyote = 0f;
+		buffer = 0f;
+		jumpDelay = jumpDelayTime;
+		inGrappleAccel = false;
+		isClinging = false;
+		isJumping = true;
+		inWallJump = -dir;
 	}
 
 	void OnJumpUp()
@@ -253,7 +289,6 @@ public class Player : MonoBehaviour
 }
 
 // fast fall and fast slide
-// wall jump
 // make level
 // make level mechanics
 // fix pull length and floor thing
