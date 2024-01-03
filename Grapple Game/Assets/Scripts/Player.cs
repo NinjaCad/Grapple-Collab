@@ -8,7 +8,7 @@ public class Player : MonoBehaviour
 	DistanceJoint2D joint;
 	Rope ropeScript;
 
-	float moveInput;
+	Vector2 moveInput;
 	float coyote;
 	float rightCoyote;
 	float leftCoyote;
@@ -20,6 +20,7 @@ public class Player : MonoBehaviour
 	bool isClinging;
 	bool resetVelocity;
 	int inWallJump;
+	bool inFastFall;
 
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
@@ -49,6 +50,7 @@ public class Player : MonoBehaviour
 	public float gravityScale;
 	public float fallGravityMultiplier;
 	public float maxFallSpeed;
+	public float fastFallMultiplier;
 	[Space(5)]
 	public float wallSlideGravity;
 	public float startWallSlideSpeed;
@@ -82,11 +84,14 @@ public class Player : MonoBehaviour
 	void Update()
 	{
 		#region Movement
-		moveInput = Input.GetAxisRaw("Horizontal");
+		moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
-		if (inWallJump != 0 && inWallJump == moveInput) { moveInput = 0; }
+		if (inWallJump != 0 && inWallJump == moveInput.x) { moveInput.x = 0; }
 
-		if (moveInput == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
+		if (moveInput.x == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
+
+		if (moveInput.y == -1) { inFastFall = true; }
+		else { inFastFall = false; }
 
 		coyote -= Time.deltaTime;
 		rightCoyote -= Time.deltaTime;
@@ -96,7 +101,7 @@ public class Player : MonoBehaviour
 
 		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
 			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
-		isClinging = onWall != 0 && moveInput == onWall;
+		isClinging = onWall != 0 && moveInput.x == onWall;
 
 		if (onWall == -1 && isClinging) { leftCoyote = wallCoyoteTime; }
 		else if (onWall == 1 && isClinging) { rightCoyote = wallCoyoteTime; }
@@ -144,7 +149,7 @@ public class Player : MonoBehaviour
 	void FixedUpdate()
 	{
 		#region Run
-		float targetSpeed = moveInput * moveSpeed;
+		float targetSpeed = moveInput.x * moveSpeed;
 		float speedDif = targetSpeed - rb.velocity.x;
 		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? acceleration : swingAcceleration) : (inWallJump == 0 ? (!inGrappleAccel ? decceleration : swingDecceleration) : wallJumpDecceleration);
 		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
@@ -152,7 +157,7 @@ public class Player : MonoBehaviour
 		#endregion
 
 		#region Friction
-		if (coyote > 0 && Mathf.Abs(moveInput) == 0f)
+		if (onGround && Mathf.Abs(moveInput.x) == 0f)
 		{
 			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), frictionAmount) * Mathf.Sign(rb.velocity.x);
 			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
@@ -162,7 +167,7 @@ public class Player : MonoBehaviour
 		#region Gravity
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			rb.gravityScale = !isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity;
+			rb.gravityScale = (!isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity) * (inFastFall ? fastFallMultiplier : 1);
 			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, !isClinging ? -maxFallSpeed : -maxWallSlideSpeed));
 			isJumping = false;
 			inWallJump = 0;
@@ -288,7 +293,6 @@ public class Player : MonoBehaviour
 	}
 }
 
-// fast fall and fast slide
 // make level
 // make level mechanics
 // fix pull length and floor thing
