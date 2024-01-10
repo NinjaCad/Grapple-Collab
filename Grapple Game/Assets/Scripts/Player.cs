@@ -212,8 +212,6 @@ public class Player : MonoBehaviour
 		
 		if (Input.GetMouseButtonUp(0))
 		{
-			isGrappled = false;
-			joint.enabled = false;
 			OnGrappleUp();
 			return;
 		}
@@ -231,9 +229,10 @@ public class Player : MonoBehaviour
 	void Pull()
 	{
 		isJumping = false;
-		joint.enabled = false;
 		inGrappleAccel = true;
+		inWallJump = 0;
 		rb.velocity = (grapplePoint - (Vector2) transform.position).normalized * Mathf.Max(minPullSpeed, rb.velocity.magnitude);
+		OnGrappleUp();
 	}
 
 	void OnGrappleDown()
@@ -258,6 +257,8 @@ public class Player : MonoBehaviour
 
 	void OnGrappleUp()
 	{
+		isGrappled = false;
+		joint.enabled = false;
 		ropeScript.points[ropeScript.points.Count - 1].isLocked = false;
 		for (int i = 0; i < ropeScript.lines.Count; i++)
 		{
