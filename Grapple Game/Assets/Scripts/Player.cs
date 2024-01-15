@@ -10,8 +10,7 @@ public class Player : MonoBehaviour
 
 	Vector2 moveInput;
 	float coyote;
-	float rightCoyote;
-	float leftCoyote;
+	Vector2 wallCoyote;
 	float buffer;
 	float jumpDelay;
 	bool isJumping;
@@ -83,28 +82,32 @@ public class Player : MonoBehaviour
 
 	void Update()
 	{
-		#region Movement
+		#region Movement Input
 		moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+		#endregion
 
+		#region Timers
+		coyote -= Time.deltaTime;
+		wallCoyote.x -= Time.deltaTime;
+		wallCoyote.y -= Time.deltaTime;
+		buffer -= Time.deltaTime;
+		jumpDelay -= Time.deltaTime;
+		#endregion
+
+		#region Checks
 		if (inWallJump != 0 && inWallJump == moveInput.x) { moveInput.x = 0; }
 
 		if (moveInput.x == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
 
-		if (moveInput.y == -1) { inFastFall = true; }
-		else { inFastFall = false; }
-
-		coyote -= Time.deltaTime;
-		rightCoyote -= Time.deltaTime;
-		leftCoyote -= Time.deltaTime;
-		buffer -= Time.deltaTime;
-		jumpDelay -= Time.deltaTime;
+		/*if (moveInput.y == -1) { inFastFall = true; }
+		else { inFastFall = false; }*/
 
 		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
 			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
 		isClinging = onWall != 0 && moveInput.x == onWall;
 
-		if (onWall == -1 && isClinging) { leftCoyote = wallCoyoteTime; }
-		else if (onWall == 1 && isClinging) { rightCoyote = wallCoyoteTime; }
+		if (onWall == -1 && isClinging) { wallCoyote.x = wallCoyoteTime; }
+		else if (onWall == 1 && isClinging) { wallCoyote.y = wallCoyoteTime; }
 		
 		if (isClinging && rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
@@ -123,16 +126,18 @@ public class Player : MonoBehaviour
 			inGrappleAccel = false;
 		}
 		else if (onGround) { onGround = false; }
-		
+		#endregion
+
+		#region Jump Input
 		if (Input.GetButtonDown("Jump")) { buffer = bufferTime; }
-		
+
 		if (buffer > 0f && jumpDelay <= 0f && !isJumping)
 		{
-			if (coyote > 0f) { Jump(); }
-			else if (rightCoyote > 0f || leftCoyote > 0f)
+			if (coyote > 0f) { Jump(0); }
+			else if (wallCoyote.y > 0f || wallCoyote.x > 0f)
 			{
-				if (leftCoyote > rightCoyote) { WallJump(1); }
-				else { WallJump(-1); }
+				if (wallCoyote.x > wallCoyote.y) { Jump(1); }
+				else { Jump(-1); }
 			}
 		}
 		
@@ -167,7 +172,7 @@ public class Player : MonoBehaviour
 		#region Gravity
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			rb.gravityScale = (!isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity) * (inFastFall ? fastFallMultiplier : 1);
+			rb.gravityScale = (!isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity) * (moveInput.y == -1 ? fastFallMultiplier : 1);
 			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, !isClinging ? -maxFallSpeed : -maxWallSlideSpeed));
 			isJumping = false;
 			inWallJump = 0;
@@ -176,26 +181,28 @@ public class Player : MonoBehaviour
 		#endregion
 	}
 
-	void Jump()
+	void Jump(int dir)
 	{
-		rb.velocity = new Vector2(rb.velocity.x, jumpForce);
-		coyote = 0f;
-		buffer = 0f;
-		jumpDelay = jumpDelayTime;
-		isJumping = true;
-	}
-
-	void WallJump(int dir)
-	{
-		rb.velocity = new Vector2(wallJumpForce.x * dir, wallJumpForce.y);
-		rightCoyote = 0f;
-		leftCoyote = 0f;
-		buffer = 0f;
-		jumpDelay = jumpDelayTime;
-		inGrappleAccel = false;
-		isClinging = false;
-		isJumping = true;
-		inWallJump = -dir;
+		if (dir == 0)
+		{
+			rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+			coyote = 0f;
+			buffer = 0f;
+			jumpDelay = jumpDelayTime;
+			isJumping = true;
+		}
+		else
+		{
+			rb.velocity = new Vector2(wallJumpForce.x * dir, wallJumpForce.y);
+			wallCoyote.x = 0f;
+			wallCoyote.y = 0f;
+			buffer = 0f;
+			jumpDelay = jumpDelayTime;
+			inGrappleAccel = false;
+			isClinging = false;
+			isJumping = true;
+			inWallJump = -dir;
+		}
 	}
 
 	void OnJumpUp()
