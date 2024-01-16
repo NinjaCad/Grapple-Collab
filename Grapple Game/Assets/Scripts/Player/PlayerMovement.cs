@@ -1,16 +1,17 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
-public class Player : MonoBehaviour
+public class PlayerMovement : PlayerSystem
 {
-	Rigidbody2D rb;
+    Rigidbody2D rb;
 	DistanceJoint2D joint;
 	Rope ropeScript;
 
 	Vector2 moveInput;
 	float coyote;
-	Vector2 wallCoyote;
+	float2 wallCoyote;
 	float buffer;
 	float jumpDelay;
 	bool isJumping;
@@ -19,152 +20,93 @@ public class Player : MonoBehaviour
 	bool isClinging;
 	bool resetVelocity;
 	int inWallJump;
-	bool inFastFall;
+	bool canMove = true;
 
 	[HideInInspector] public Vector2 grapplePoint;
 	[HideInInspector] public float grappleRadius;
 	[HideInInspector] public bool isGrappled;
 	[HideInInspector] public bool inGrappleAccel;
 	[HideInInspector] public bool isHanging;
-	
-	[Header("Run")]
-	public float moveSpeed;
-	public float acceleration;
-	public float decceleration;
-	public float velPower;
-	[Space(5)]
-	public float frictionAmount;
 
-	[Header("Jump")]
-	public float jumpForce;
-	public Vector2 wallJumpForce;
-	[Range(0f, 1)] public float jumpCutMultiplier;
-	public float wallJumpDecceleration;
-	[Space(5)]
-	public float coyoteTime;
-	public float wallCoyoteTime;
-	public float bufferTime;
-	public float jumpDelayTime;
-	[Space(5)]
-	public float gravityScale;
-	public float fallGravityMultiplier;
-	public float maxFallSpeed;
-	public float fastFallMultiplier;
-	[Space(5)]
-	public float wallSlideGravity;
-	public float startWallSlideSpeed;
-	public float maxWallSlideSpeed;
-	
-	[Header("Checks")]
-	public Transform groundCheckPoint;
-	public Vector2 groundCheckSize;
-	public LayerMask groundLayer;
-	[Space(5)]
-	public Transform leftCheckPoint;
-	public Transform rightCheckPoint;
-	public Vector2 wallCheckSize;
-	public LayerMask wallLayer;
-
-	[Header("Grapple")]
-	public GameObject grapplePrefab;
-	public float swingAcceleration;
-	public float swingDecceleration;
-	public float grappleRange;
-	public LayerMask grappleLayers;
-	[Space(5)]
-	public float minPullSpeed;
-
-	void Awake()
+	protected override void Awake()
 	{
-		rb = GetComponent<Rigidbody2D>();
+		base.Awake();
+        rb = GetComponent<Rigidbody2D>();
 		joint = GetComponent<DistanceJoint2D>();
 	}
 
 	void Update()
 	{
-		#region Movement Input
-		moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-		#endregion
-
+		if (!canMove) { return; }
+		
 		#region Timers
 		coyote -= Time.deltaTime;
-		wallCoyote.x -= Time.deltaTime;
-		wallCoyote.y -= Time.deltaTime;
+		wallCoyote[0] -= Time.deltaTime;
+		wallCoyote[1] -= Time.deltaTime;
 		buffer -= Time.deltaTime;
 		jumpDelay -= Time.deltaTime;
 		#endregion
 
 		#region Checks
-		if (inWallJump != 0 && inWallJump == moveInput.x) { moveInput.x = 0; }
-
 		if (moveInput.x == -Mathf.Sign(rb.velocity.x)) { inGrappleAccel = false; }
 
-		/*if (moveInput.y == -1) { inFastFall = true; }
-		else { inFastFall = false; }*/
-
-		onWall = Physics2D.OverlapBox(leftCheckPoint.position, wallCheckSize, 0f, wallLayer) ? -1 :
-			Physics2D.OverlapBox(rightCheckPoint.position, wallCheckSize, 0f, wallLayer) ? 1 : 0;
+		onWall = Physics2D.OverlapBox(player.ID.data.leftCheckPoint + (Vector2) transform.position, player.ID.data.wallCheckSize, 0f, player.ID.data.wallLayer) ? -1 :
+			Physics2D.OverlapBox(player.ID.data.rightCheckPoint + (Vector2) transform.position, player.ID.data.wallCheckSize, 0f, player.ID.data.wallLayer) ? 1 : 0;
 		isClinging = onWall != 0 && moveInput.x == onWall;
 
-		if (onWall == -1 && isClinging) { wallCoyote.x = wallCoyoteTime; }
-		else if (onWall == 1 && isClinging) { wallCoyote.y = wallCoyoteTime; }
+		if (onWall == -1 && isClinging) { wallCoyote[0] = player.ID.data.wallCoyoteTime; }
+		else if (onWall == 1 && isClinging) { wallCoyote[1] = player.ID.data.wallCoyoteTime; }
 		
 		if (isClinging && rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
 			if (!resetVelocity)
 			{
-				rb.velocity = new Vector2(rb.velocity.x, -startWallSlideSpeed);
+				rb.velocity = new Vector2(rb.velocity.x, -player.ID.data.startWallSlideSpeed);
 				resetVelocity = true;
 			}
 		}
 		else { resetVelocity = false; }
 		
-		if (Physics2D.OverlapBox(groundCheckPoint.position, groundCheckSize, 0f, groundLayer))
+		if (Physics2D.OverlapBox(player.ID.data.groundCheckPoint + (Vector2) transform.position, player.ID.data.groundCheckSize, 0f, player.ID.data.groundLayer))
 		{
-			coyote = coyoteTime;
+			coyote = player.ID.data.coyoteTime;
 			onGround = true;
 			inGrappleAccel = false;
 		}
 		else if (onGround) { onGround = false; }
 		#endregion
 
-		#region Jump Input
-		if (Input.GetButtonDown("Jump")) { buffer = bufferTime; }
-
+		#region Jump
 		if (buffer > 0f && jumpDelay <= 0f && !isJumping)
 		{
-			if (coyote > 0f) { Jump(0); }
-			else if (wallCoyote.y > 0f || wallCoyote.x > 0f)
-			{
-				if (wallCoyote.x > wallCoyote.y) { Jump(1); }
-				else { Jump(-1); }
-			}
+			if (coyote > 0f) { OnJumpDown(0); }
+			else if (wallCoyote[0] > 0f || wallCoyote[1] > 0f) { OnJumpDown(wallCoyote[0] > wallCoyote[1] ? 1 : -1); }
 		}
-		
-		if (Input.GetButtonUp("Jump")) { OnJumpUp(); }
 		#endregion
 		
 		#region Grapple
-		if (Input.GetMouseButtonDown(0) && !isGrappled) { OnGrappleDown(); }
-		
-		if (isGrappled) { Grapple(); }
+		if (isGrappled) { OnGrapple(); }
 		#endregion
 	}
 
 	void FixedUpdate()
 	{
+		if (!canMove) { return; }
+		
 		#region Run
-		float targetSpeed = moveInput.x * moveSpeed;
+		if (inWallJump != 0 && inWallJump == moveInput.x) { moveInput.x = 0; }
+
+		float targetSpeed = moveInput.x * player.ID.data.moveSpeed;
 		float speedDif = targetSpeed - rb.velocity.x;
-		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? acceleration : swingAcceleration) : (inWallJump == 0 ? (!inGrappleAccel ? decceleration : swingDecceleration) : wallJumpDecceleration);
-		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, velPower) * Mathf.Sign(speedDif);
+		float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? (!inGrappleAccel ? player.ID.data.acceleration : player.ID.data.swingAcceleration) : (inWallJump == 0 ? (!inGrappleAccel ? player.ID.data.decceleration : player.ID.data.swingDecceleration) : player.ID.data.wallJumpDecceleration);
+		float movement = Mathf.Pow(Mathf.Abs(speedDif) * accelRate, player.ID.data.velPower) * Mathf.Sign(speedDif);
 		rb.AddForce(movement * Vector2.right);
 		#endregion
 
 		#region Friction
 		if (onGround && Mathf.Abs(moveInput.x) == 0f)
 		{
-			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), frictionAmount) * Mathf.Sign(rb.velocity.x);
+			float amount = Mathf.Min(Mathf.Abs(rb.velocity.x), player.ID.data.frictionAmount) * Mathf.Sign(rb.velocity.x);
 			rb.AddForce(Vector2.right * -amount, ForceMode2D.Impulse);
 		}
 		#endregion
@@ -172,56 +114,42 @@ public class Player : MonoBehaviour
 		#region Gravity
 		if (rb.velocity.y < 0 && !(isGrappled && isHanging))
 		{
-			rb.gravityScale = (!isClinging ? gravityScale * fallGravityMultiplier : wallSlideGravity) * (moveInput.y == -1 ? fastFallMultiplier : 1);
-			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, !isClinging ? -maxFallSpeed : -maxWallSlideSpeed));
+			rb.gravityScale = (!isClinging ? player.ID.data.gravityScale * player.ID.data.fallGravityMultiplier : player.ID.data.wallSlideGravity) * (moveInput.y == -1 ? player.ID.data.fastFallMultiplier : 1);
+			rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, !isClinging ? -player.ID.data.maxFallSpeed : -player.ID.data.maxWallSlideSpeed));
 			isJumping = false;
 			inWallJump = 0;
 		}
-		else { rb.gravityScale = gravityScale; }
+		else { rb.gravityScale = player.ID.data.gravityScale; }
 		#endregion
 	}
 
-	void Jump(int dir)
+	void OnJumpDown(int dir)
 	{
-		if (dir == 0)
-		{
-			rb.velocity = new Vector2(rb.velocity.x, jumpForce);
-			coyote = 0f;
-			buffer = 0f;
-			jumpDelay = jumpDelayTime;
-			isJumping = true;
-		}
-		else
-		{
-			rb.velocity = new Vector2(wallJumpForce.x * dir, wallJumpForce.y);
-			wallCoyote.x = 0f;
-			wallCoyote.y = 0f;
-			buffer = 0f;
-			jumpDelay = jumpDelayTime;
-			inGrappleAccel = false;
-			isClinging = false;
-			isJumping = true;
-			inWallJump = -dir;
-		}
+		if (dir == 0) { rb.velocity = new Vector2(rb.velocity.x, player.ID.data.jumpForce); }
+		else { rb.velocity = new Vector2(player.ID.data.wallJumpForce.x * dir, player.ID.data.wallJumpForce.y); }
+
+		coyote = 0f;
+		wallCoyote[0] = 0f;
+		wallCoyote[1] = 0f;
+		buffer = 0f;
+		jumpDelay = player.ID.data.jumpDelayTime;
+		inGrappleAccel = false;
+		isClinging = false;
+		isJumping = true;
+		inWallJump = -dir;
 	}
 
 	void OnJumpUp()
 	{
-		if (rb.velocity.y > 0 && isJumping) { rb.AddForce(Vector2.down * rb.velocity.y * (1 - jumpCutMultiplier), ForceMode2D.Impulse); }
+		if (rb.velocity.y > 0 && isJumping) { rb.AddForce(Vector2.down * rb.velocity.y * (1 - player.ID.data.jumpCutMultiplier), ForceMode2D.Impulse); }
 		isJumping = false;
 		buffer = 0f;
 	}
 
-	void Grapple()
+	void OnGrapple()
 	{
 		ropeScript.points[ropeScript.points.Count - 1].pastPos = ropeScript.points[ropeScript.points.Count - 1].currentPos;
 		ropeScript.points[ropeScript.points.Count - 1].currentPos = transform.position;
-		
-		if (Input.GetMouseButtonUp(0))
-		{
-			OnGrappleUp();
-			return;
-		}
 
 		if (Vector2.Distance(transform.position, grapplePoint) >= grappleRadius - 0.1f && !onGround)
 		{
@@ -229,16 +157,14 @@ public class Player : MonoBehaviour
 			isHanging = true;
 		}
 		else { isHanging = false; }
-
-		if (Input.GetButtonDown("Pull") || Input.GetMouseButtonDown(1)) { Pull(); }
 	}
 
-	void Pull()
+	void OnPullDown()
 	{
 		isJumping = false;
 		inGrappleAccel = true;
 		inWallJump = 0;
-		rb.velocity = (grapplePoint - (Vector2) transform.position).normalized * Mathf.Max(minPullSpeed, rb.velocity.magnitude);
+		rb.velocity = (grapplePoint - (Vector2) transform.position).normalized * Mathf.Max(player.ID.data.minPullSpeed, rb.velocity.magnitude);
 		OnGrappleUp();
 	}
 
@@ -246,7 +172,7 @@ public class Player : MonoBehaviour
 	{
 		Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 		Vector2 direction = (mousePos - (Vector2) transform.position).normalized;
-		RaycastHit2D raycast = Physics2D.Raycast(transform.position, direction, grappleRange, grappleLayers);
+		RaycastHit2D raycast = Physics2D.Raycast(transform.position, direction, player.ID.data.grappleRange, player.ID.data.grappleLayers);
 		if (raycast.collider != null)
 		{
 			isGrappled = true;
@@ -264,6 +190,8 @@ public class Player : MonoBehaviour
 
 	void OnGrappleUp()
 	{
+		if (!isGrappled) { return; }
+		
 		isGrappled = false;
 		joint.enabled = false;
 		ropeScript.points[ropeScript.points.Count - 1].isLocked = false;
@@ -275,9 +203,9 @@ public class Player : MonoBehaviour
 
 	void CreateRope()
 	{
-		GameObject currentPrefab = Instantiate(grapplePrefab);
+		GameObject currentPrefab = Instantiate(player.ID.data.grapplePrefab);
 		ropeScript = currentPrefab.GetComponent<Rope>();
-		ropeScript.player = this;
+		// ropeScript.player = this;
 
 		ropeScript.points.Add(new Point());
 		ropeScript.points[0].currentPos = grapplePoint;
@@ -299,8 +227,50 @@ public class Player : MonoBehaviour
 		ropeScript.lines[ropeScript.lines.Count - 1].pointIndexes = new Vector2Int(ropeScript.points.Count - 1, ropeScript.points.Count - 2);
 		ropeScript.lines[ropeScript.lines.Count - 1].lineLength = grappleRadius % 0.5f;
 	}
-}
 
-// make level
-// make level mechanics
-// fix pull length and floor thing
+    void MoveInput(Vector2 input)
+    {
+        moveInput = input;
+    }
+
+    void OnJumpButtonDown()
+    {
+        buffer = player.ID.data.bufferTime;
+    }
+
+	void StopMovement()
+	{
+		canMove = false;
+		rb.velocity = Vector2.zero;
+		rb.gravityScale = 0;
+	}
+
+	void StartMovement()
+	{
+		canMove = true;
+	}
+
+    void OnEnable()
+    {
+        player.ID.events.OnXYInput += MoveInput;
+        player.ID.events.OnJumpDown += OnJumpButtonDown;
+        player.ID.events.OnJumpUp += OnJumpUp;
+        player.ID.events.OnGrappleDown += OnGrappleDown;
+        player.ID.events.OnGrappleUp += OnGrappleUp;
+        player.ID.events.OnPullDown += OnPullDown;
+		player.ID.events.OnDeath += StopMovement;
+		player.ID.events.OnRespawn += StartMovement;
+    }
+
+    void OnDisable()
+    {
+        player.ID.events.OnXYInput -= MoveInput;
+        player.ID.events.OnJumpDown -= OnJumpButtonDown;
+        player.ID.events.OnJumpUp -= OnJumpUp;
+        player.ID.events.OnGrappleDown -= OnGrappleDown;
+        player.ID.events.OnGrappleUp -= OnGrappleUp;
+        player.ID.events.OnPullDown -= OnPullDown;
+		player.ID.events.OnDeath -= StopMovement;
+		player.ID.events.OnRespawn -= StartMovement;
+    }
+}

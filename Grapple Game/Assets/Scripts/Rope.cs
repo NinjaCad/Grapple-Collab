@@ -47,7 +47,7 @@ public class Rope : MonoBehaviour
         lineRenderer.positionCount = pointPositions.Length;
         lineRenderer.SetPositions(pointPositions);
         
-        if (!player.isGrappled && isReleased == false) { isReleased = true; }
+        // if (!player.isGrappled && isReleased == false) { isReleased = true; }
 
         if (isReleased)
         {
