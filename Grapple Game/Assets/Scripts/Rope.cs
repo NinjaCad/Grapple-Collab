@@ -1,25 +1,24 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class Rope : MonoBehaviour
 {
-    [HideInInspector] public Player player;
     LineRenderer lineRenderer;
 
     public List<Point> points = new List<Point>();
     public List<Line> lines = new List<Line>();
 
+    bool isDetached;
+    float timeAfterDetached;
+    
     [Header("Swing")]
     [SerializeField] float gravityScale;
     
-    bool isReleased;
     [SerializeField] float fullTime;
     [SerializeField] float invisTime;
-    float timeAfterRelease;
-
-    Vector2 ownGrapplePoint;
-
+    
     void Awake()
     {
         lineRenderer = GetComponent<LineRenderer>();
@@ -34,37 +33,32 @@ public class Rope : MonoBehaviour
         
         lineRenderer.startWidth = 0.15f;
         lineRenderer.endWidth = 0.15f;
-        timeAfterRelease = 0.0f;
+        timeAfterDetached = 0.0f;
+
+        lineRenderer.positionCount = points.Count;
     }
 
     void Update()
     {
+        #region Update Renderer Position
         Vector3[] pointPositions = new Vector3[points.Count];
         for (int i = 0; i < pointPositions.Length; i++)
         {
             pointPositions[i] = points[i].currentPos;
         }
-        lineRenderer.positionCount = pointPositions.Length;
         lineRenderer.SetPositions(pointPositions);
+        #endregion
         
-        // if (!player.isGrappled && isReleased == false) { isReleased = true; }
+        if (!isDetached) { return; }
+        
+        timeAfterDetached += Time.deltaTime;
 
-        if (isReleased)
-        {
-            timeAfterRelease += Time.deltaTime;
-            
-            if (timeAfterRelease > fullTime) { Destroy(this.gameObject); }
-        }
+        if (timeAfterDetached > fullTime) { Destroy(this.gameObject); }
     }
 
     void FixedUpdate()
     {
-        ChangeVelocity();
-        FindPositions();
-    }
-
-    void ChangeVelocity()
-    {
+        #region Change Velocity
         for (int i = 0; i < points.Count; i++)
         {
             if (!points[i].isLocked)
@@ -75,33 +69,36 @@ public class Rope : MonoBehaviour
                 points[i].currentPos = newPos;
             }
         }
-    }
-
-    void FindPositions()
-    {
+        #endregion
+        
+        #region Find Positions
         for (int i = 0; i < 10; i++)
         {
             for (int j = 0; j < lines.Count; j++)
             {
-                FindPos(j, lines[j].pointIndexes.x, lines[j].pointIndexes.y);
+                int2 pointIndexes = lines[j].pointIndexes;
+                if (!points[pointIndexes[0]].isLocked)
+                {
+                    float radius = Vector2.Distance(points[pointIndexes[0]].currentPos, points[pointIndexes[1]].currentPos) - lines[j].lineLength;
+                    radius /= points[pointIndexes[1]].isLocked ? 1 : 2;
+                    Vector2 direction = (points[pointIndexes[1]].currentPos - points[pointIndexes[0]].currentPos).normalized;
+                    points[pointIndexes[0]].currentPos += radius * direction;
+                }
+                if (!points[pointIndexes[1]].isLocked)
+                {
+                    float radius = Vector2.Distance(points[pointIndexes[1]].currentPos, points[pointIndexes[0]].currentPos) - lines[j].lineLength;
+                    Vector2 direction = (points[pointIndexes[0]].currentPos - points[pointIndexes[1]].currentPos).normalized;
+                    points[pointIndexes[1]].currentPos += radius * direction;
+                }
             }
         }
+        #endregion
     }
 
-    void FindPos(int lineIndex, int pointIndex1, int pointIndex2)
+    public void DetachRope()
     {
-        if (!points[pointIndex1].isLocked)
-        {
-            float radius = (Vector2.Distance(points[pointIndex1].currentPos, points[pointIndex2].currentPos) - lines[lineIndex].lineLength) / (points[pointIndex2].isLocked ? 1 : 2);
-            float theta = Mathf.Atan2(points[pointIndex1].currentPos.y - points[pointIndex2].currentPos.y, points[pointIndex1].currentPos.x - points[pointIndex2].currentPos.x);
-            points[pointIndex1].currentPos += new Vector2(-radius * Mathf.Cos(theta), -radius * Mathf.Sin(theta));
-        }
-        if (!points[pointIndex2].isLocked)
-        {
-            float radius = Vector2.Distance(points[pointIndex2].currentPos, points[pointIndex1].currentPos) - lines[lineIndex].lineLength;
-            float theta = Mathf.Atan2(points[pointIndex2].currentPos.y - points[pointIndex1].currentPos.y, points[pointIndex2].currentPos.x - points[pointIndex1].currentPos.x);
-            points[pointIndex2].currentPos += new Vector2(-radius * Mathf.Cos(theta), -radius * Mathf.Sin(theta));
-        }
+        isDetached = true;
+        timeAfterDetached = 0.0f;
     }
 }
 
@@ -116,6 +113,6 @@ public class Point
 [System.Serializable]
 public class Line
 {
-    public Vector2Int pointIndexes;
+    public int2 pointIndexes;
     public float lineLength;
 }

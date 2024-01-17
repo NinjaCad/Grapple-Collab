@@ -6,29 +6,29 @@ public class PlayerRespawn : PlayerSystem
 {
     GameObject lastCheckpoint;
     
-    bool inDeathSequence;
+    bool canMove = true;
     
     void Update()
     {
-        if (inDeathSequence) { return; }
+        if (!canMove) { return; }
         
-        RaycastHit2D boxcast = Physics2D.BoxCast(transform.position, player.ID.data.checkpointCheckSize, 0f, Vector2.zero, 0f, player.ID.data.checkpointLayer);
+        RaycastHit2D boxcast = Physics2D.BoxCast(transform.position, player.data.checkpointCheckSize, 0f, Vector2.zero, 0f, player.data.checkpointLayer);
         if (boxcast.collider != null) { lastCheckpoint = boxcast.collider.gameObject; }
         
-        if (Physics2D.OverlapBox(transform.position, player.ID.data.hazardCheckSize, 0f, player.ID.data.hazardLayer)) { StartCoroutine(OnDeath()); }
+        if (Physics2D.OverlapBox(transform.position, player.data.hazardCheckSize, 0f, player.data.hazardLayer)) { StartCoroutine(OnDeath()); }
     }
 
     IEnumerator OnDeath()
     {
-        inDeathSequence = true;
-        player.ID.events.OnDeath?.Invoke();
+        canMove = false;
+        player.events.OnDeath?.Invoke();
 
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(0.5f);
 
         if (lastCheckpoint != null) { transform.position = lastCheckpoint.transform.position; }
         else { transform.position = Vector2.zero; }
         
-        player.ID.events.OnRespawn?.Invoke();
-        inDeathSequence = false;
+        player.events.OnRespawn?.Invoke();
+        canMove = true;
     }
 }

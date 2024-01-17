@@ -13,17 +13,17 @@ public class PlayerInput : PlayerSystem
 		if (!canMove) { return; }
 		
 		Vector2 moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-        player.ID.events.OnXYInput?.Invoke(moveInput);
+        player.events.OnXYInput?.Invoke(moveInput);
 
-		if (Input.GetButtonDown("Jump")) { player.ID.events.OnJumpDown?.Invoke(); }
+		if (Input.GetButtonDown("Jump")) { player.events.OnJumpButtonDown?.Invoke(); }
 		
-		if (Input.GetButtonUp("Jump")) { player.ID.events.OnJumpUp?.Invoke(); }
+		if (Input.GetButtonUp("Jump")) { player.events.OnJumpButtonUp?.Invoke(); }
 		
-		if (Input.GetMouseButtonDown(0)) { player.ID.events.OnGrappleDown?.Invoke(); }
+		if (Input.GetMouseButtonDown(0)) { player.events.OnGrappleButtonDown?.Invoke(); }
 
-        if (Input.GetMouseButtonUp(0)) { player.ID.events.OnGrappleUp?.Invoke(); }
+        if (Input.GetMouseButtonUp(0)) { player.events.OnGrappleButtonUp?.Invoke(); }
 
-        if (Input.GetMouseButtonDown(1)) { player.ID.events.OnPullDown?.Invoke(); }
+        if (Input.GetMouseButtonDown(1)) { player.events.OnPullButtonDown?.Invoke(); }
 	}
 
 	void StopMovement()
@@ -38,13 +38,13 @@ public class PlayerInput : PlayerSystem
 
 	void OnEnable()
 	{
-		player.ID.events.OnDeath += StopMovement;
-		player.ID.events.OnRespawn += StartMovement;
+		player.events.OnDeath += StopMovement;
+		player.events.OnRespawn += StartMovement;
 	}
 
 	void OnDisable()
 	{
-		player.ID.events.OnDeath -= StopMovement;
-		player.ID.events.OnRespawn -= StartMovement;
+		player.events.OnDeath -= StopMovement;
+		player.events.OnRespawn -= StartMovement;
 	}
 }

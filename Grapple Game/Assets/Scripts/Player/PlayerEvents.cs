@@ -7,14 +7,15 @@ public struct PlayerEvents
 {
     #region Movement
     public Action<Vector2> OnXYInput;
-    public Action OnJumpDown;
-    public Action OnJumpUp;
+    public Action OnJumpButtonDown;
+    public Action OnJumpButtonUp;
     #endregion
 
     #region Grapple
-    public Action OnGrappleDown;
-    public Action OnGrappleUp;
-    public Action OnPullDown;
+    public Action OnGrappleButtonDown;
+    public Action<Vector2> OnGrapple;
+    public Action OnGrappleButtonUp;
+    public Action OnPullButtonDown;
     #endregion
 
     #region Death and Respawn
