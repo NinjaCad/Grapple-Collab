@@ -64,11 +64,15 @@ public class PlayerRope : PlayerSystem
     {
         player.events.OnGrapple += CreateNewRope;
         player.events.OnGrappleButtonUp += DetachRope;
+        player.events.OnPullButtonDown += DetachRope;
+        player.events.OnDeath += DetachRope;
     }
 
     void OnDisable()
     {
         player.events.OnGrapple -= CreateNewRope;
         player.events.OnGrappleButtonUp -= DetachRope;
+        player.events.OnPullButtonDown -= DetachRope;
+        player.events.OnDeath -= DetachRope;
     }
 }

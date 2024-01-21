@@ -165,6 +165,7 @@ public class PlayerMovement : PlayerSystem
 		inWallJump = 0;
 		rb.velocity = (grapplePoint - (Vector2) transform.position).normalized * Mathf.Max(player.data.minPullSpeed, rb.velocity.magnitude);
 		OnGrappleUp();
+		StartCoroutine(PullStopMovement());
 	}
 
 	void OnGrappleDown()
@@ -188,6 +189,22 @@ public class PlayerMovement : PlayerSystem
 		player.events.OnGrapple?.Invoke(grapplePoint);
 	}
 
+	IEnumerator PullStopMovement()
+	{
+		canMove = false;
+		buffer = 0.0f;
+		coyote = 0.0f;
+		wallCoyote[0] = 0.0f;
+		wallCoyote[1] = 0.0f;
+		jumpDelay = 0.0f;
+
+		rb.gravityScale = 0;
+
+		yield return new WaitForSeconds(player.data.pullDuration);
+
+		canMove = true;
+	}
+
 	void OnGrappleUp()
 	{
 		isGrappled = false;
@@ -209,6 +226,8 @@ public class PlayerMovement : PlayerSystem
 		canMove = false;
 		rb.velocity = Vector2.zero;
 		rb.gravityScale = 0;
+		StopAllCoroutines();
+		if (joint.enabled == true) { OnGrappleUp(); }
 	}
 
 	void StartMovement()

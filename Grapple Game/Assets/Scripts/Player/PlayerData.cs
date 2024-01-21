@@ -55,6 +55,7 @@ public class PlayerData : ScriptableObject
 	public LayerMask grappleLayers;
 	[Space(5)]
 	public float minPullSpeed;
+	public float pullDuration;
 
 	[Header("Checkpoint")]
 	public Vector2 checkpointCheckSize;

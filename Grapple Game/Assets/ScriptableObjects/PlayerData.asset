@@ -56,6 +56,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   minPullSpeed: 20
+  pullDuration: 0.05
   checkpointCheckSize: {x: 1, y: 1}
   checkpointLayer:
     serializedVersion: 2
