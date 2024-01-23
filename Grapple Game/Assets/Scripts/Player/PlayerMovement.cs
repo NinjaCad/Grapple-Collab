@@ -192,6 +192,7 @@ public class PlayerMovement : PlayerSystem
 	IEnumerator PullStopMovement()
 	{
 		canMove = false;
+		
 		buffer = 0.0f;
 		coyote = 0.0f;
 		wallCoyote[0] = 0.0f;
@@ -224,10 +225,19 @@ public class PlayerMovement : PlayerSystem
 	void StopMovement()
 	{
 		canMove = false;
+
+		buffer = 0.0f;
+		coyote = 0.0f;
+		wallCoyote[0] = 0.0f;
+		wallCoyote[1] = 0.0f;
+		jumpDelay = 0.0f;
+
 		rb.velocity = Vector2.zero;
 		rb.gravityScale = 0;
+
 		StopAllCoroutines();
-		if (joint.enabled == true) { OnGrappleUp(); }
+
+		if (isGrappled) { OnGrappleUp(); }
 	}
 
 	void StartMovement()
